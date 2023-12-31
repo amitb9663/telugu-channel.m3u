@@ -1,240 +1,166 @@
-<html><script>
-    window[Symbol.for('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')] = new (class PostClient {
-    constructor(name, destination) {
-        this.name = name;
-        this.destination = destination;
-        this.serverListeners = {};
-        this.bgRequestsListeners = {};
-        this.bgEventsListeners = {};
-        window.addEventListener('message', (message) => {
-            const data = message.data;
-            const isNotForMe = !(data.destination && data.destination === this.name);
-            const hasNotEventProp = !data.event;
-            if (isNotForMe || hasNotEventProp) {
-                return;
-            }
-            if (data.event === 'MARIO_POST_SERVER__BG_RESPONSE') {
-                const response = data.args;
-                if (this.hasBgRequestListener(response.requestId)) {
-                    try {
-                        this.bgRequestsListeners[response.requestId](response.response);
-                    }
-                    catch (e) {
-                        console.log(e);
-                    }
-                    delete this.bgRequestsListeners[response.requestId];
-                }
-            }
-            else if (data.event === 'MARIO_POST_SERVER__BG_EVENT') {
-                const response = data.args;
-                if (this.hasBgEventListener(response.event)) {
-                    try {
-                        this.bgEventsListeners[data.id](response.payload);
-                    }
-                    catch (e) {
-                        console.log(e);
-                    }
-                }
-            }
-            else if (this.hasServerListener(data.event)) {
-                try {
-                    this.serverListeners[data.event](data.args);
-                }
-                catch (e) {
-                    console.log(e);
-                }
-            }
-            else {
-                console.log(`event not handled: ${data.event}`);
-            }
-        });
-    }
-    emitToServer(event, args) {
-        const id = this.generateUIID();
-        const message = {
-            args,
-            destination: this.destination,
-            event,
-            id,
-        };
-        window.postMessage(message, location.origin);
-        return id;
-    }
-    emitToBg(bgEventName, args) {
-        const requestId = this.generateUIID();
-        const request = { bgEventName, requestId, args };
-        this.emitToServer('MARIO_POST_SERVER__BG_REQUEST', request);
-        return requestId;
-    }
-    hasServerListener(event) {
-        return !!this.serverListeners[event];
-    }
-    hasBgRequestListener(requestId) {
-        return !!this.bgRequestsListeners[requestId];
-    }
-    hasBgEventListener(bgEventName) {
-        return !!this.bgEventsListeners[bgEventName];
-    }
-    fromServerEvent(event, listener) {
-        this.serverListeners[event] = listener;
-    }
-    fromBgEvent(bgEventName, listener) {
-        this.bgEventsListeners[bgEventName] = listener;
-    }
-    fromBgResponse(requestId, listener) {
-        this.bgRequestsListeners[requestId] = listener;
-    }
-    generateUIID() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
-        });
-    }
-})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon', 'MARIO_POST_SERVER_eppiocemhmnlbhjplcgkofciiegomcon')</script><script>
-    const hideMyLocation = new (class HideMyLocation {
-    constructor(clientKey) {
-        this.clientKey = clientKey;
-        this.watchIDs = {};
-        this.client = window[Symbol.for(clientKey)];
-        const getCurrentPosition = navigator.geolocation.getCurrentPosition;
-        const watchPosition = navigator.geolocation.watchPosition;
-        const clearWatch = navigator.geolocation.clearWatch;
-        const self = this;
-        navigator.geolocation.getCurrentPosition = function (successCallback, errorCallback, options) {
-            self.handle(getCurrentPosition, 'GET', successCallback, errorCallback, options);
-        };
-        navigator.geolocation.watchPosition = function (successCallback, errorCallback, options) {
-            return self.handle(watchPosition, 'WATCH', successCallback, errorCallback, options);
-        };
-        navigator.geolocation.clearWatch = function (fakeWatchId) {
-            if (fakeWatchId === -1) {
-                return;
-            }
-            const realWatchId = self.watchIDs[fakeWatchId];
-            delete self.watchIDs[fakeWatchId];
-            return clearWatch.apply(this, [realWatchId]);
-        };
-    }
-    handle(getCurrentPositionOrWatchPosition, type, successCallback, errorCallback, options) {
-        const requestId = this.client.emitToBg('HIDE_MY_LOCATION__GET_LOCATION');
-        let fakeWatchId = this.getRandomInt(0, 100000);
-        this.client.fromBgResponse(requestId, (response) => {
-            if (response.enabled) {
-                if (response.status === 'SUCCESS') {
-                    const position = this.map(response);
-                    successCallback(position);
-                }
-                else {
-                    const error = this.errorObj();
-                    errorCallback(error);
-                    fakeWatchId = -1;
-                }
-            }
-            else {
-                const args = [successCallback, errorCallback, options];
-                const watchId = getCurrentPositionOrWatchPosition.apply(navigator.geolocation, args);
-                if (type === 'WATCH') {
-                    this.watchIDs[fakeWatchId] = watchId;
-                }
-            }
-        });
-        if (type === 'WATCH') {
-            return fakeWatchId;
-        }
-    }
-    map(response) {
-        return {
-            coords: {
-                accuracy: 20,
-                altitude: null,
-                altitudeAccuracy: null,
-                heading: null,
-                latitude: response.latitude,
-                longitude: response.longitude,
-                speed: null,
-            },
-            timestamp: Date.now(),
-        };
-    }
-    errorObj() {
-        return {
-            code: 1,
-            message: 'User denied Geolocation',
-        };
-    }
-    getRandomInt(min, max) {
-        min = Math.ceil(min);
-        max = Math.floor(max);
-        return Math.floor(Math.random() * (max - min + 1)) + min;
-    }
-})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')
-  </script><head><script ecommerce-type="extend-native-history-api">(() => {
-            const nativePushState = history.pushState;
-            const nativeReplaceState = history.replaceState;
-            const nativeBack = history.back;
-            const nativeForward = history.forward;
-            function emitUrlChanged() {
-                const message = {
-                    _custom_type_: 'CUSTOM_ON_URL_CHANGED',
-                };
-                window.postMessage(message);
-            }
-            history.pushState = function () {
-                nativePushState.apply(history, arguments);
-                emitUrlChanged();
-            };
-            history.replaceState = function () {
-                nativeReplaceState.apply(history, arguments);
-                emitUrlChanged();
-            };
-            history.back = function () {
-                nativeBack.apply(history, arguments);
-                emitUrlChanged();
-            };
-            history.forward = function () {
-                nativeForward.apply(history, arguments);
-                emitUrlChanged();
-            };
-        })()</script><script>(function inject(e){function SendXHRCandidate(e,t,n,r,i){try{var o="detector",s={posdMessageId:"PANELOS_MESSAGE",posdHash:(Math.random().toString(36).substring(2,15)+Math.random().toString(36).substring(2,15)+Math.random().toString(36).substring(2,15)).substring(0,22),type:"VIDEO_XHR_CANDIDATE",from:o,to:o.substring(0,6),content:{requestMethod:e,url:t,type:n,content:r}};i&&i[0]&&i[0].length&&(s.content.encodedPostBody=i[0]),window.postMessage(s,"*")}catch(e){}}var t=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(){this.requestMethod=arguments[0],t.apply(this,arguments)};var n=XMLHttpRequest.prototype.send;XMLHttpRequest.prototype.send=function(){var t=Object.assign(arguments,{}),r=this.onreadystatechange;return this.onreadystatechange=function(){if(4!==this.readyState||function isFrameInBlackList(t){return e.some((function(e){return t.includes(e)}))}(this.responseURL)||setTimeout(SendXHRCandidate(this.requestMethod,this.responseURL,this.getResponseHeader("content-type"),this.response,t),0),r)return r.apply(this,arguments)},n.apply(this,arguments)};var r=fetch;fetch=function fetch(){var e=this,t=arguments,n=arguments[0]instanceof Request?arguments[0].url:arguments[0],i=arguments[0]instanceof Request?arguments[0].method:"GET";return new Promise((function(o,s){r.apply(e,t).then((function(e){if(e.body instanceof ReadableStream){var t=e.json;e.json=function(){var r=arguments,o=this;return new Promise((function(s,a){t.apply(o,r).then((function(t){setTimeout(SendXHRCandidate(i,n,e.headers.get("content-type"),JSON.stringify(t)),0),s(t)})).catch((function(e){a(e)}))}))};var r=e.text;e.text=function(){var t=arguments,o=this;return new Promise((function(s,a){r.apply(o,t).then((function(t){setTimeout(SendXHRCandidate(i,n,e.headers.get("content-type"),t),0),s(t)})).catch((function(e){a(e)}))}))}}o.apply(this,arguments)})).catch((function(){s.apply(this,arguments)}))}))}})(["facebook.com/","twitter.com/","youtube-nocookie.com/embed/","//vk.com/","//www.vk.com/","//linkedin.com/","//www.linkedin.com/","//instagram.com/","//www.instagram.com/","//www.google.com/recaptcha/api2/","//hangouts.google.com/webchat/","//www.google.com/calendar/","//www.google.com/maps/embed","spotify.com/","soundcloud.com/","//player.vimeo.com/","//disqus.com/","//tgwidget.com/","//js.driftt.com/","friends2follow.com","/widget","login","//video.bigmir.net/","blogger.com","//smartlock.google.com/","//keep.google.com/","/web.tolstoycomments.com/","moz-extension://","chrome-extension://","/auth/","//analytics.google.com/","adclarity.com","paddle.com/checkout","hcaptcha.com","recaptcha.net","2captcha.com","accounts.google.com","www.google.com/shopping/customerreviews","buy.tinypass.com","gstatic.com","secureir.ebaystatic.com","docs.google.com","contacts.google.com","github.com","mail.google.com","chat.google.com","audio.xpleer.com","keepa.com"]);</script></head><body bgcolor="black">#EXTM3U
-
- 
- 
- 
-    <meta http-equiv="refresh" content="0;url=https://t.me/allinonereborn"> 
- 
- 
-    <p>This page is being redirected to Google.com.</p> 
-<div style="text-align: right;position: fixed;z-index:9999999;bottom: 0;width: auto;right: 1%;cursor: pointer;line-height: 0;display:block !important;"><a title="Hosted on free web hosting 000webhost.com. Host your own website for FREE." target="_blank" href="https://www.000webhost.com/?utm_source=000webhostapp&amp;utm_campaign=000_logo&amp;utm_medium=website&amp;utm_content=footer_img"><img src="https://cdn.000webhost.com/000webhost/logo/footer-powered-by-000webhost-white2.png" alt="www.000webhost.com"></a></div><script>function getCookie(t){for(var e=t+"=",n=decodeURIComponent(document.cookie).split(";"),o=0;o<n.length;o++){for(var i=n[o];" "==i.charAt(0);)i=i.substring(1);if(0==i.indexOf(e))return i.substring(e.length,i.length)}return""}getCookie("hostinger")&&(document.cookie="hostinger=;expires=Thu, 01 Jan 1970 00:00:01 GMT;",location.reload());var wordpressAdminBody=document.getElementsByClassName("wp-admin")[0],notification=document.getElementsByClassName("notice notice-success is-dismissible"),hostingerLogo=document.getElementsByClassName("hlogo"),mainContent=document.getElementsByClassName("notice_content")[0];if(null!=wordpressAdminBody&¬ification.length>0&&null!=mainContent && new Date().toISOString().slice(0, 10) > '2023-10-29' && new Date().toISOString().slice(0, 10) < '2023-11-27'){var googleFont=document.createElement("link");googleFontHref=document.createAttribute("href"),googleFontRel=document.createAttribute("rel"),googleFontHref.value="https://fonts.googleapis.com/css?family=Roboto:300,400,600,700",googleFontRel.value="stylesheet",googleFont.setAttributeNode(googleFontHref),googleFont.setAttributeNode(googleFontRel);var css="@media only screen and (max-width: 576px) {#main_content {max-width: 320px !important;} #main_content h1 {font-size: 30px !important;} #main_content h2 {font-size: 40px !important; margin: 20px 0 !important;} #main_content p {font-size: 14px !important;} #main_content .content-wrapper {text-align: center !important;}} @media only screen and (max-width: 781px) {#main_content {margin: auto; justify-content: center; max-width: 445px;}} @media only screen and (max-width: 1325px) {.web-hosting-90-off-image-wrapper {position: absolute; max-width: 95% !important;} .notice_content {justify-content: center;} .web-hosting-90-off-image {opacity: 0.3;}} @media only screen and (min-width: 769px) {.notice_content {justify-content: space-between;} #main_content {margin-left: 5%; max-width: 445px;} .web-hosting-90-off-image-wrapper {position: absolute; display: flex; justify-content: center; width: 100%; }} .web-hosting-90-off-image {max-width: 90%;} .content-wrapper {min-height: 454px; display: flex; flex-direction: column; justify-content: center; z-index: 5} .notice_content {display: flex; align-items: center;} * {-webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;} .upgrade_button_red_sale{box-shadow: 0 2px 4px 0 rgba(255, 69, 70, 0.2); max-width: 350px; border: 0; border-radius: 3px; background-color: #ff4546 !important; padding: 15px 55px !important; font-family: 'Roboto', sans-serif; font-size: 16px; font-weight: 600; color: #ffffff;} .upgrade_button_red_sale:hover{color: #ffffff !important; background: #d10303 !important;}",style=document.createElement("style"),sheet=window.document.styleSheets[0];style.styleSheet?style.styleSheet.cssText=css:style.appendChild(document.createTextNode(css)),document.getElementsByTagName("head")[0].appendChild(style),document.getElementsByTagName("head")[0].appendChild(googleFont);var button=document.getElementsByClassName("upgrade_button_red")[0],link=button.parentElement;link.setAttribute("href","https://www.hostinger.com/hosting-starter-offer?utm_source=000webhost&utm_medium=panel&utm_campaign=000-wp"),link.innerHTML='<button class="upgrade_button_red_sale">Claim deal</button>',(notification=notification[0]).setAttribute("style","padding-bottom: 0; padding-top: 5px; background-color: #040713; background-size: cover; background-repeat: no-repeat; color: #ffffff; border-left-color: #040713;"),notification.className="notice notice-error is-dismissible";var mainContentHolder=document.getElementById("main_content");mainContentHolder.setAttribute("style","padding: 0;"),hostingerLogo[0].remove();var h1Tag=notification.getElementsByTagName("H1")[0];h1Tag.className="000-h1",h1Tag.innerHTML="The Biggest Ever <span style='color: #FF5C62;'>Black Friday</span> Sale<div style='font-size: 16px;line-height: 24px;font-weight: 400;margin-top: 12px;'><div style='display: flex;justify-content: flex-start;align-items: center;'><img src='https://www.000webhost.com/static/default.000webhost.com/images/generic/green-check-mark.png' alt='' style='margin-right: 10px; width: 20px;'>Managed WordPress Hosting</div><div style='display: flex;justify-content: flex-start;align-items: center;'><img src='https://www.000webhost.com/static/default.000webhost.com/images/generic/green-check-mark.png' alt='' style='margin-right: 10px; width: 20px;'>WordPress Acceleration</div><div style='display: flex;justify-content: flex-start;align-items: center;'><img src='https://www.000webhost.com/static/default.000webhost.com/images/generic/green-check-mark.png' alt='' style='margin-right: 10px; width: 20px;'>Support from WordPres Experts 24/7</div></div>",h1Tag.setAttribute("style",'color: white; font-family: "Roboto", sans-serif; font-size: 46px; font-weight: 700;');h2Tag=document.createElement("H2");h2Tag.innerHTML="<span style='font-size: 20px'>$</span>2.49<span style='font-size: 20px'>/mo</span>",h2Tag.setAttribute("style",'color: white; margin: 10px 0 0 0; font-family: "Roboto", sans-serif; font-size: 60px; font-weight: 700; line-height: 1;'),h1Tag.parentNode.insertBefore(h2Tag,h1Tag.nextSibling);var paragraph=notification.getElementsByTagName("p")[0];paragraph.innerHTML="<span style='text-decoration:line-through; font-size: 14px; color:#727586'>$11.99.mo</span><br>+ 2 Months Free",paragraph.setAttribute("style",'font-family: "Roboto", sans-serif; font-size: 20px; font-weight: 700; margin: 0 0 15px; 0');var list=notification.getElementsByTagName("UL")[0];list.remove();var org_html=mainContent.innerHTML,new_html='<div class="content-wrapper">'+mainContent.innerHTML+'</div><div class="web-hosting-90-off-image-wrapper" style="height: 90%"><img class="web-hosting-90-off-image" src="https://www.000webhost.com/static/default.000webhost.com/images/sales/bf2023/hero.png"></div>';mainContent.innerHTML=new_html;var saleImage=mainContent.getElementsByClassName("web-hosting-90-off-image")[0]}else if(null!=wordpressAdminBody&¬ification.length>0&&null!=mainContent){var bulletPoints = mainContent.getElementsByTagName('li');var replacement=['Increased performance (up to 5x faster) - Thanks to Hostinger’s WordPress Acceleration and Caching solutions','WordPress AI tools - Creating a new website has never been easier','Weekly or daily backups - Your data will always be safe','Fast and dedicated 24/7 support - Ready to help you','Migration of your current WordPress sites to Hostinger is automatic and free!','Try Premium Web Hosting now - starting from $1.99/mo'];for (var i=0;i<bulletPoints.length;i++){bulletPoints[i].innerHTML = replacement[i];}}</script>
-
-#extm3u:
-#EXTINF:-1 tvg-id="558" group-title="iPlex Kids" tvg-language="Telugu" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Kushi_TV.png",Kushi TV
-https://sanjibweb.me/jiaa/jio.m3u8?id=558
-#EXTINF:-1 tvg-id="898" group-title="iPlex Music" tvg-language="Telugu" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Gemini_Music_HD.png",Gemini Music HD
-#EXTINF:-1 tvg-id="GeminiMusic.in" tvg-name="TELUGU| GEMINI MUSIC" tvg-logo="http://logo.protv.cc/picons/logos/GEMINI-MUSIC.jpg" group-title="ASIA | TELEGU",TELUGU| GEMINI MUSIC
-http://4ksuper.live:80/Richard/Richard123/155857
-https://sanjibweb.me/jiaa/jio.m3u8?id=898
-#EXTINF:-1 tvg-id="729" group-title="iPlex Entertainment" tvg-language="Telugu" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Gemini_Comedy.png",Gemini Comedy
-https://sanjibweb.me/jiaa/jio.m3u8?id=729
-#EXTINF:-1 tvg-id="166" group-title="iPlex Kids" tvg-language="Telugu" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Cartoon_Network_Telugu.png",Cartoon Network Telugu
-https://sanjibweb.me/jiaa/jio.m3u8?id=166
-#EXTINF:-1 tvg-id="" tvg-name="CRI: STAR SPORTS TELUGU 1 HD" tvg-logo="https://static.wikia.nocookie.net/logopedia/images/7/74/Star_Sports_1_Telugu_HD.png/revision/latest/scale-to-width-down/250?cb=20211017160105" group-title="CRICKET",CRI: STAR SPORTS TELUGU 1 HD
-http://livetvbox.live:8080/live/7878/7878/177843.ts
-#EXTINF:-1 tvg-id="" tvg-name="TELUGU: Star Maa Music" tvg-logo="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAoGBxEQExERERARERETGRMYGRYXDhAREg8SFhYXGBcXFhgZICoiGRwnHxYWIzQjJysuMTExGCE2OzYwOiowMS4BCwsLDw4PHRERHTAnIScwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMP/AABEIAOoAtAMBIgACEQEDEQH/xAAbAAEAAQUBAAAAAAAAAAAAAAAABQEDBAYHAv/EAEcQAAEDAQQGBgQLBwMFAQAAAAEAAgMRBAUSIQYxQVFhcRMiMoGRoVJyscEHFCMzNEJic5Ky0RZTgpPC8PGDs+FDY6Kjw1T/xAAaAQEAAgMBAAAAAAAAAAAAAAAABAUCAwYB/8QANBEAAQMCBAQDBgYDAQAAAAAAAQACAwQREiExQQUTUWEicYEVkaGxweEyM0JS0fAGI/EU/9oADAMBAAIRAxEAPwDsyIiIiIiIiIiIiIiIiIiIvDlh2K8GyvmjGuFwac9ZLQfer88ga1zjqAJ7gtF0FvUvtdqqcpTiHME08lvigL2PeP0j6qJNUCJ7Wnc/b5roSIi0KWiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIqFEUDptbehs0lDm+jR3nPyqucaM2ox2hrhx79vuW0fCVbKuZF6Ic/v1D2rTLtfgkjO5zfDUui4fDaldfdcxxCUumNtsh6fddrgkDmgjUQDzBVxRGi1oxwhpOcZLe4avIhS4XPvaWuIOy6GCQSxNeNxdekRFityIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIi8ry51ASvSidJ7V0cDqa3kMHN2vyqvWjE4AbrVNII43POwJXO9KrQZZpn7KtaOQqT7lCtUrfgwlrebu8mnuUaAuxpmgRBo0XFtkMgxHfNdB0NtnypZslY1w9ZuR8iPBbhVcqui8jE+B+xtKmv1a4SPBdSY6oBGorm6+HBJfYroeDSEwmM6g/Aq6iIoKuERERERERERERERERERUqlURVRUREVUVFVERFSqVRFRajpbacdoiiGqNrnO9Z1A3yB8VttVzs2vpZbTOdRcQ31GZDyHmplFHieXdB8SqXjk+ClLRq42UHfb8UruFB4LCor0jsRJO0leKLqIxhaB0XNtyaB0Xpz6MbwcR3EV9xXT9DrZ01liJNSwYTvq3IeVFy50WJrm1pqOquY/yt1+DaYtDmE5PzGVCHMOFwpyLSqvicYdFfcG6tuFyhk1r65fULeEVKpVc+uoVUVKoiKqKiIiqiolURVRERFi2yEvaWte5hOpzaYmnvWk39eF52Ilzntlg/eCOmHg8fV56lvwXh7A4EEAg6xSoI4rbDKI3ZgEdCo80PMFgSD1BXMGafWj63lT3hZEWnkm18jf4Iis3Sj4PwcUtjo06zCTSN3qH6h4aloj2FrjG9ro5RrY4YXjlsPcr6nFHUDIAHoqKoinjObneYJW6s0wc7VaKc4Whe36U2ihLZ43cMLKnzWktC9BSfZ0XQe4KCZZgfzHe9bVJpfbhni/9IVj9ubWCAXipI/6TaqBY8jUSO8hXRM46yTzzohooh+lqyFXONXE+q2qPS18jSHyyNxAiohjrmKVGajzhZZiGOxbK0oTXLVyULUnaRyK9ML6UxktyNKDWNRqtbaRsZ8OWYUaZ75rY3Xsb5oAgC9AKtFNutN1beaZ7qeFVO3TPKxlYaB7XVa5wq0Ato4U21yUK9tQRvqr0dulADGuNBQANaKlR52YxY2t3WYc8WMZsVsrL3vDbNGP9Jq9tva27bQ3+S1Q9jua3TZhsjR6T3YG+efkpiyaCyH5+0kcGAn/yd+irJBTM1LfQXU6OLicujyPh80fftoZrnr/BG1Yj9MJxk1zHHm0nwaFsFk0MsceuIynfI4v8tSuW69LHYRQ9HGdjGMbjd/CNXeo/PhLsLGX9LfK6nsoKloxSzEDz+6grNfF5ydmA03mJzR4uosqS03jGMU1os8Dd7qE9wGtRF5adTynBZo+jB1GmOU+5vmsO7tHp7VJWZ75n7euXBnrvOQ5DNeTPZEAZcLSdGgXcfRSIYC8nllxtqSSAPVSZ0rkLsEU8tqf/ANuzxxs73Oqady2G6bFbJKSWiZ0YyIjYTiPrO9wCyLi0fiswFGjFvpRrfVHvOamFBdNj0AA9L/DJWEdPg1JJ8zZe0RFgpCIiIipRQWk2i0FuYRI0CQdl4HWafeFOhF61xabtyKwcxrhZwuFxO+bktFhfgmBfGezJvHB3uOax2EbP+Qu1W6xRzMdHKxr2O1gioP6HiudaTaFyWUums4dPBrLNc0Q4em3z5q8o+JA2bJkfh9lSVnD3C7mZjputdC9tSANkGJjgeG79FRpzocjuOs8t6uQ8HRUhbqOiuNVwUVtqlLvuWWUYzhhi/eSHA2nCuZWqWZkYu82XscEkzsMYJPZYLVIWC5prR81GSPSPVYO86+5Z0dqu+zdkPtco2kYYweFcvase36YWmTJhETdzBV34j7gq2Sucfyx6n+F0tF/idTLZ0vhClrPolDCMVqnFNwIY38RzPcpi4Pipr8WjGEfXEZwk7g92bjyWv3HorLORLay/DrDHOJe/1ieyOGtbmTHAz6kcbBwa1oVXPM9+RcT8lZOoKSk8MdiRqdh67q8sG9b4hszcUzw3c3W53Jq1q/dNzmyzDnIR+RvvPgtPmmMjnPe8vfrJJxOd4r0U7I246h2EdNz6KC6rL3YKdtz12C2C+tNZpSWQgwsO0daV/f8AV7vFQcVkDnEyPz1kVxPdzds8yq3fZ5ZnBkTDV2xoq5w4nd4Bb9o5ogyCkk1Hy7Braz9TxUJ/FXv/ANVG3CN3HVb4+HgESVTrn9o0UZo7oy+QBzm9BDupSSQd+YHE5rcrHZGQtDI2hrRsA18TvKvgJRaIoAzxOJLjqTmSpWLLCMgNANF7REUhYoiIiIiIiIiIiIqUVURFpulOg8doJmsxFntOZqBSOU/bA1E+kO+q0WQSMc+G2RGN8ebiRiZTY5pGuuwjyXaHLiunF89PaJqHq4sIz+rHkO6tSrCjqJWgtvcDqlPweGul8eQGZIyJ7L3Yr3Yx2GGIvIz6WUBzm7sLOyObqlerXbJJjikke8/aNachqHco+wQ4G563ZnhuHgpC7LvlneI424nHua0ek47At5Nzjcc+67KmoaWijuxoAGp39SvNnhdI4Na0ve7INAqSVvmjOiTYcMs9HzbBrbEeG93HwWbcFwR2JhJIMlOtI6gy3D0WqF0h0zrWOzcjJTX6g9/go15JjhjGW5XO8W42AC1psPi5Tl+aRQ2YEE45KZMBz5uP1R5rTLTabTeD+s6kY2ZiNnIbSqXdc7pD0kxdQ50JJe/i47PaptoawUFGtHcGhVFdxiGivFTeOTQnUA9u6poKKarOOfws6aE+fZatLc0tK5O16jhDKHOoPtUtceh/SZ4g/e8GsbN4b6bvJY9tvhuMsizDhm7ZjGvDzG3gs/4KbcWPtVke6tCJmZ62uyd/Se9ao+HVlQzn1ZI3sdbd+y3trKaJ/IgAy3Gn/Vudz3RDZm4Y257XHNzjxPuUiFQKqltaGiwFgFmTc3VURFmvERERERERERERERERERERFDaWXn8Vss020NIbxe7JvmVwyxWfpJKnMNzOes/5XRfhivLqwWZp7RMjhwbk3zJ8FrGjFzSTFsTB1nZucR1WN3n9NpU2BlmYiui4XG2OEyvyBzv2CybnumW1SCOMcXOI6rG7z7htXQYIbNdcObqb3EVkmfwG08NQWJabdZrphETBjmOeGvWe703nYP8AAWkWy2zWuUFxL3uyAGTWjc0bAt7ITNd7zhYNzuuf4zxwyv5cWfQfUqQvzSKa2OwAFsVerGDUuOwu3nhqCyLssLYHDpQMZAoa1awn6vA8VkXXdjLO3G/OTfsbwb+q8XwxzmY2g4yDRjgQJGD6zDqceC52u4i+tf8A+OhFmaEjK/e/RR6WjbTtNVWG52Bzt6LMtttZE3E91Nw+s48AtZvO9XzZdlnog6/WO0qPNrdISXPLnaut2uQru3KlVf8ABf8AHIaMB8lnP67DyCqOI8XlqfC3ws6bnzXonxGfes+5rwFntVmtGpuLo3/dv6pryND3KOJVuU1aQdXs4roZ4g9hB3CqYHmN4cNiu7NKqobQ+8fjFlhkPawhrvXb1T7K96mVxxaWnCdQuxa4OAI3VURF4skREREREREREREREREXlxoqqI0ptxgs0r2gl9MLAMy6R5wtA41K9AuV60XIC5nfGO8bwkwDH1sDPRDGGlTuFakrYbZesV1xGz2eklpPzj6VDHbzvO5uzaoJlvFgY6GFwdan/PTDPof+3GdpG129RFmhfK7C3MnMknIDa5xV5DSt5fMmOFgF89+57LXxXipfhpabMDK43KyIxLaJNbpJHnMk1LjvJ2BbbdV2ss7aDryuoKgVLvstG5etGbmo2kTak9p5FMX6DcFt13XYyLPtP9IjUNw3BcxxGvl4k8ww+GEan91vosaKiZSDmSZvO3RYF23FiIknzOxlatb6288NXNSlssMczDHIwOb4YaaiDsPELLQBZU1OynaAwW77rfI4yE4s7+5co0w0JkgLp48UsevFTrxesBrH2h3qDs5Mgoe2PCQcOPtXci0HIrTNJ9Bmy4pbNRkhzLNTHn7PonyXQUnEbENk9/8AKpKzh5teP3fwufFeeB1HyUjarE7NrmlkrO01wo53/PHaowldBG8SDJUgFiRut2+CO8sp7O45sdiHsd7iuiLi2idv+L2yGWvVeRG/vyaf73LtAK5XiERjmN9101BIHRW6L0iIoKnIiIiIiIiIiIiIiIiLyFpPwk3uYujjZk4VeTtBNWtpuPaNeC3Wq5Jf7pbwtkjIgXdagyqGtbkCf72qZQsYZMchs1ouVCrHvDAxmpNsum6g7LA6R2FuvadjRvP95roGi+iNGtfIC1uRoR13ne73DYpPRjRKOzNBeA+TXvDTv4lbIAtPEap9a6xuIxoNz3PbstlHTNpxfVx36eSt2eBrBRooOSvIijtaGiwFgpKqiIskREREUPfdwxWodYYZB2XtFHNPvHArn2kGjskRo5tH7HDsTDhudwPmurqzarIyVpZI0OadhUumrHwHI3HRV9XQMm8TcndevmuESsOY1HwLXA1B7iuzaJXkLTZYJfrFoDuEjeq4eIWoaX6FvAMkVX0/FTc7f63jvVz4KLeQZrM/Ij5RoORB7Lx7D3qxr3x1MAlZqNQolDjhl5bxYn+5LoiIio1doiIiIiIiIiIiIiIiLCvNkjopBFTpHAhtTQNJyqeWtRl13fZrsh6zmgntSO7UjtvHuU67UuUaS3o+0zPcScDSWsbsa0GleZ1qXSU5qCWXsBmVBraltOA61ycgt6/bOx/vT/Lf+iuxaUWRzHSdMA1pANQW1JFQADr7lzSG753tL2RSOaK9YNJblrzWOCrL2XC64a43HkVV+1p2/iaLHzXTv20sX7138p/6I3TKxk0Ehqaf9N+s9y5yy7pizpBFJ0dK4sBw0313KzB2m+s32he+zKcg4XE27hPak4IBAF+y7SCsC8b7s8GUsrWndWrvAZrB0tvc2aCrcpH0a37JIzd3Bc0OOR1Tie9x4uc4n2qBR0POu5xsAp9ZxDkkNaLkrpf7Z2L96f5b/wBFWLTCxvIaJDVxAHyb8yTQbFzya5542l74ZGNGskUAHFWrt+eh9eP8wU72dAWlzHE27hQRxOcOAc0C/b7rsmJRd4aR2aE4XzNxbgS5w5galEaeX0+FjYonYXyA1cDmxgyy4k5LQ7PC+R2FjXPcdjQXOKiUlBzW8x5sFLq+IGN3LjFyukHTKxfvHfy3/oocPss1rinscmGfF1m4HtbNHTrAmmRpn3LVbZdc0IDpYnxgmlXCgJ3LP0J+lw/x/lKluoYmROkjcdDuCCoba6WSVrJGgZjYghdUCIiol0SqiIiIiIiIiIiIiIiK1NqPIri8mt3M+1dpm1HkVxaU5u5n2lXPBzm/0+qouMj8Hr9F0+7Wj4g37n+krluzu9y6rdn0Fv3P9JXKtnd7lt4ZrL5rVxEeGLyXUbcKXe77kfkC5lZ+03m32hdPvD6A77kflC5pYYnPkja0YnOc2gGs5rzhrgI5CeqcRaS+MDoPmtw+EoHBZ91X+OEKK0AfG20/KUqWuDa+nUauNKrdNI7oFqhMdaOFC07A8b+B1LmNtsckLiyVhY4b8q8Qdo4hY0TmzU5gvY5r2ta+GoE1rjL4LpOmlPik9NdG/mC5vdnz0X3kf5gsq7pnvjtWJ7nUh2uLqfKN3qxcsRfPC1oqS9ngHAk+S30sPIikYTe2/otFRNz5WOAtfb1U38IwPxlm7o20/E6qyvg0fGHTA06Q4abyzOoHepnTG4DaY2vj+djrTZiadba+xc6lY+NxDg5j27DVrmlaqfDUUvJvYhbqgPpqrm2uDmt7+Eoj4vHT94PyuWsaFfS4f4/ylWelc+yyFznOPTRayXHsO3rK0FiLrXEQKhuMn7IwkVPeQs2R8mlewnS/yWt0vOqmPAtey6iFVEXPrpkRERERERERERERUKEoi8kVUWLgsbq0giOZr1Gmh2grMtU1I3vaQSGuO8VAJC1aw3w9hFSGh8ge91NbS3rCm7Kq2xseQS06KNM+MEBwButrZZ2BmANAZTDhpkG6qclhfs9ZP/zxfgar143gIojI2jsgQMVMVae41UFddqMlrx5tD8XVrUdWMD3Ixr7FwJAC8kfGHBpAJPwU/N0IHQvLKOAAYSKFvZAA3agvNluuCCr2RRxnaQ0NIHNate8h+MSnEatdln2adGRTdmp+2vLrE4uNSYMztJLMyVk6MtAscjqsWyte51wLt0UsHA/5Vq1WOOUUkY14+00O9q1O5LS988ZLjmS050Ba1soaCBuopTSS9gwdFG4iSrKkGmAYmkg8w5eOhcHho1XoqGujL3DL5rIbdtiY4xiKJrntzbhpiZiGXjTJZVkuuCE4o4mMO9rADTmtLYyTquIeXFoeDUk4QG9evMa1tlwXj0zMJPXZQHrVc5oAGM8zVZSxuaLhxI3WEEjHn8IB2yUmHDV/YWNa7thl+cjY/m0Ehaiy8pWSPeHnES4GuYcGveADyC2e9b1bA0Vze6lGjbmGk8gXBYuiewgA5nos2zseCXDIdUbcVmwlnQx4SQSMIoXAUB50KyLFd8UIIijawH0WgV5rXLBZrTKJZW1aJWuPa6rnOa3JueVdjtlFlaN28tc+CQ54nUJdUueXOBaOWAlevY6x8V7ai68jkZiHgtfQrZUXio1bctuYXpaFMVURERERERERERQl+3oYQ5jQ4PIGF2CrK5mld4DT4hQ5vlzYeiBcHYj1sWdDJWnhkttnia8UcARxFQsaK7IWtDejaQK0qMRFTU5lbo3sAsRcqJLFI512usLKB0Y+j2jl/wDIKEk7Pd/QVuRu6OCKfAKBzXGmxtGYaDhkoHR2yMmkLXtDmhlabK1A9hKkxSgY3+Siywu8DN81Ggk1BJPa2k0zkUjo79IZ/qflU9dtysgc9wcXYthAo0YnOy/FTuUDo39Ij/1Pyr0yh7H20AWLYHRvaXHMlWr3+fm9Y+yNT9o+gH7gfkUPpBZSyZziah9XauyKsbQ8clYtF8ydF0IDcHRhnHJhq6vcMl4WmRrC3ZeteInPDt7po78/F6z/AGSqb0gugS/KRj5WrcsQGMBzak13BqwNGrtkMokc0sawk5tIxVMgoPEHvXvSSWWOaNxfRterTtNZiiDweea8eSZRhOYCyiAbAcQyJ/pVmwXg+MNgnjAbhDM+q5rCGg57hU/2FMXNdbYi+UOxY64aGrejrVvfxWFe9vs00RcDV/1aDC8EtqK1zw5iq86KzvL3tLnFgaKCpLQcVMu5a3AlpIy6jqtkZDXhpz6Hp5qDf2n+tJ/uPU1pj24OR/3I1Cv7T/Wk/wBx62PSe73yCORgr0esbSC9hJ5ANK3vIDmE91GY0uY8AXOXzWfo/wDR4Pu2exYpuSNszJQ8tOMuwkg4nEPJA/GfBYdgv+OKGFgaXOa1gdlQABoqRvOpWLvdJaLQJK1Ebg7PKkdZWgAaq9YKNgeC52gz9VL5rCGttc5eirfNrfHaJsDi3EI601mjcvavNj0gkDY4zm7FGMZOIuaXsDqjf1/JZ8t2ufasTo6xZVJphPyZGrnRStnu+KOuBjW1ps2jV7AsnPjwgEXNgjY5S8uBsLlXonk16pFCRnTrcRwV1AiiqaqoiIvURERERERFbIrkf8rCsF1tifI8Zue5xrSmFpocI4VCz0CZgLEtBsUoo+z3PFHJ0rRQ7BWjW1FDQcVIovQSLoWg2WNbLGyVuF4qKg6yKEaioa1aLMcThkLAQaCmKjqOFa7qHVwWxBUXokczQrF8LHG7grcEWFrW7gBzoKKzeFgZM3C8ZVacjQijgdfcFlIsLkZrLCD4VEsuCAAAN1Fp11LqADCSdhoKhSUcTWijQABTUKABXkWRcTqvBG1ugUNDcETZHPoHA0o0ioaauLjxqXdylqL0qBC4nVetY1t7KFt2jkcji5pLS41dtBB10Gw5BSFgsTIW4GDLzcdpPNZaoEMjiMOyxbExpxAZr0iIvFsREREREREX/9k=" group-title="TELUGU",TELUGU: Star Maa Music
-http://livetvbox.live:8080/live/7878/7878/57772.ts
-#EXTINF:-1 tvg-id="" tvg-name="Telugu: GEMINI COMEDY HD" tvg-logo="" group-title="TELUGU",Telugu: GEMINI COMEDY HD
-http://livetvbox.live:8080/live/7878/7878/9042.ts
-#EXTINF:-1 tvg-id="starmovieshd.in" tvg-name="IN: STAR MOVIES (FHD)" tvg-logo="https://pluspng.com/img-png/star-movies-logo-png-star-movies-hd-star-movies-png-300.png" group-title="INDIA ENGLISH MOVIES",IN: STAR MOVIES (FHD)
-http://livetvbox.live:8080/live/7878/7878/9384.ts
-#EXTINF:-1 tvg-id="starmovieshd.in" tvg-name="IN: STAR MOVIES HD" tvg-logo="https://pluspng.com/img-png/star-movies-logo-png-star-movies-hd-star-movies-png-300.png" group-title="INDIA ENGLISH MOVIES",IN: STAR MOVIES HD
-http://livetvbox.live:8080/live/7878/7878/979.ts
-#EXTINF:-1 tvg-id="" tvg-name="ENGLISH| STAR MOVIES HD" tvg-logo="http://logo.protv.cc/picons/logos/starmovies.png" group-title="ASIA | ENGLISH",ENGLISH| STAR MOVIES HD
-http://4ksuper.live:80/Richard/Richard123/1116488
-#EXTINF:-1 tvg-id="StarMovies.in" tvg-name="ENGLISH| STAR MOVIES HD" tvg-logo="http://logo.protv.cc/picons/logos/starmovies.png" group-title="ASIA | ENGLISH",ENGLISH| STAR MOVIES HD
-http://4ksuper.live:80/Richard/Richard123/155727
-#EXTINF:-1 tvg-id="StarMovies.in" tvg-name="ENGLISH| STAR MOVIES FHD" tvg-logo="http://logo.protv.cc/picons/logos/starmovies.png" group-title="ASIA | ENGLISH",ENGLISH| STAR MOVIES FHD
-http://4ksuper.live:80/Richard/Richard123/282639
-#EXTINF:-1 tvg-id="" tvg-name="IN: HBO HD" tvg-logo="https://www.nicepng.com/png/detail/223-2236107_hbo-go-logo-png-hbo-3-hd.png" group-title="INDIA ENGLISH MOVIES",IN: HBO HD
-http://livetvbox.live:8080/live/7878/7878/152373.ts
+<html>
+	<head>
+		<script>
+			window.location.replace("https://t.me/allinonereborn/");
+		</script>
+	</head>
+</html>
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] BHAKTI TV" group-title="[IN] TELUGU",[TLG] BHAKTI TV
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281773&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] GEMINI UHD" group-title="[IN] TELUGU",[TLG] GEMINI UHD
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281774&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] GEMINI MOVIES UHD" group-title="[IN] TELUGU",[TLG] GEMINI MOVIES UHD
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281775&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] ETV UHD" group-title="[IN] TELUGU",[TLG] ETV UHD
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281776&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] STAR MAA UHD" group-title="[IN] TELUGU",[TLG] STAR MAA UHD
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281777&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] STAR MAA MOVIES UHD" group-title="[IN] TELUGU",[TLG] STAR MAA MOVIES UHD
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281778&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] STAR MAA GOLD" group-title="[IN] TELUGU",[TLG] STAR MAA GOLD
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281779&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] ZEE TELUGU UHD" group-title="[IN] TELUGU",[TLG] ZEE TELUGU UHD
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281780&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] 10 TV" group-title="[IN] TELUGU",[TLG] 10 TV
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281781&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] BBC EARTH UHD" group-title="[IN] TELUGU",[TLG] BBC EARTH UHD
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281782&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] SAKSHI TV" group-title="[IN] TELUGU",[TLG] SAKSHI TV
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=760763&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] DISCOVERY WORLD UHD" group-title="[IN] TELUGU",[TLG] DISCOVERY WORLD UHD
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281783&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] ETV CINEMA TELUGU" group-title="[IN] TELUGU",[TLG] ETV CINEMA TELUGU
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281784&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] ETV LIFE" group-title="[IN] TELUGU",[TLG] ETV LIFE
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281785&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] ETV PLUS" group-title="[IN] TELUGU",[TLG] ETV PLUS
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281786&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] GEMINI COMEDY" group-title="[IN] TELUGU",[TLG] GEMINI COMEDY
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281787&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] GEMINI LIFE" group-title="[IN] TELUGU",[TLG] GEMINI LIFE
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281788&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] GEMINI MUSIC" group-title="[IN] TELUGU",[TLG] GEMINI MUSIC
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281789&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] HISTORY TV 18 UHD" group-title="[IN] TELUGU",[TLG] HISTORY TV 18 UHD
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281791&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] KUSHI TV" group-title="[IN] TELUGU",[TLG] KUSHI TV
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281792&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] NAT GEO TELUGU UHD" group-title="[IN] TELUGU",[TLG] NAT GEO TELUGU UHD
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281793&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] SONY YAY" group-title="[IN] TELUGU",[TLG] SONY YAY
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281796&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] TATA SKY TELUGU CINEMA UHD" group-title="[IN] TELUGU",[TLG] TATA SKY TELUGU CINEMA UHD
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281797&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] TV5 NEWS" group-title="[IN] TELUGU",[TLG] TV5 NEWS
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281798&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] TV9 TELUGU NEWS" group-title="[IN] TELUGU",[TLG] TV9 TELUGU NEWS
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281799&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] NTV NEWS HD" group-title="[IN] TELUGU",[TLG] NTV NEWS HD
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=854763&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] V6 NEWS" group-title="[IN] TELUGU",[TLG] V6 NEWS
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281800&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] VANITHA TV" group-title="[IN] TELUGU",[TLG] VANITHA TV
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281801&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="[TLG] ZEE CINEMALU" group-title="[IN] TELUGU",[TLG] ZEE CINEMALU
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://m3u.4klion.xyz:80/play/live.php?mac=00:1A:79:78:59:F9&stream=281803&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="TELUGU| MAA GOLD" group-title="ASIA | TELEGU",TELUGU| MAA GOLD
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://pal.alphatx.me:80/play/live.php?mac=00:1A:79:3a:2a:b6&stream=281968&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="TELUGU| HOLLYWOOD LOCAL" group-title="ASIA | TELEGU",TELUGU| HOLLYWOOD LOCAL
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://pal.alphatx.me:80/play/live.php?mac=00:1A:79:3a:2a:b6&stream=1097632&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="TELUGU| UDAYA MOVIES" group-title="ASIA | TELEGU",TELUGU| UDAYA MOVIES
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://pal.alphatx.me:80/play/live.php?mac=00:1A:79:3a:2a:b6&stream=1097629&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="TELUGU| STUDIO YUVA" group-title="ASIA | TELEGU",TELUGU| STUDIO YUVA
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://pal.alphatx.me:80/play/live.php?mac=00:1A:79:3a:2a:b6&stream=1097628&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="TELUGU| STUDIO ONEP" group-title="ASIA | TELEGU",TELUGU| STUDIO ONEP
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://pal.alphatx.me:80/play/live.php?mac=00:1A:79:3a:2a:b6&stream=1097627&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="TELUGU| HUNGAMA" group-title="ASIA | TELEGU",TELUGU| HUNGAMA
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://pal.alphatx.me:80/play/live.php?mac=00:1A:79:3a:2a:b6&stream=1097624&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="TELUGU| DD SAPTGIRI" group-title="ASIA | TELEGU",TELUGU| DD SAPTGIRI
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://pal.alphatx.me:80/play/live.php?mac=00:1A:79:3a:2a:b6&stream=1097620&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="TELUGU| CV ROM" group-title="ASIA | TELEGU",TELUGU| CV ROM
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://pal.alphatx.me:80/play/live.php?mac=00:1A:79:3a:2a:b6&stream=1097619&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="TELUGU| CVR NEWS" group-title="ASIA | TELEGU",TELUGU| CVR NEWS
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://pal.alphatx.me:80/play/live.php?mac=00:1A:79:3a:2a:b6&stream=1097618&extension=ts
+#EXTINF:-1 tvg-id="" tvg-name="TELUGU| CVR HEALTH" group-title="ASIA | TELEGU",TELUGU| CVR HEALTH
+#EXTVLCOPT:cache=17238
+#EXTVLCOPT:http-user-agent=Lavf53.32.100
+http://pal.alphatx.me:80/play/live.php?mac=00:1A:79:3a:2a:b6&stream=1097617&extension=ts
 
 <script disable-devtool-auto="" src="https://cdn.jsdelivr.net/npm/disable-devtool@latest"></script>
 
